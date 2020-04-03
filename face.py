@@ -1,7 +1,10 @@
+# This program generate multi view dataset under 3DMM model
+
 import torch
 import pyredner
 import h5py
 import os
+import numpy as np
 
 os.system("rm -rf generated")
 
@@ -16,7 +19,7 @@ with h5py.File(r'model2017-1_bfm_nomouth.h5', 'r') as hf:
 indices = triangle_list.permute(1, 0).contiguous()
 print("finish loading")
 
-def model(cam_pos, cam_look_at, shape_coeffs, color_coeffs, ambient_color, dir_light_intensity):
+def model(cam_pos, cam_look_at, shape_coeffs, color_coeffs, ambient_color, dir_light_intensity, dir_light_direction):
     vertices = (shape_mean + shape_basis @ shape_coeffs).view(-1, 3)
     normals = pyredner.compute_vertex_normal(vertices, indices)
     colors = (color_mean + color_basis @ color_coeffs).view(-1, 3)
@@ -30,33 +33,64 @@ def model(cam_pos, cam_look_at, shape_coeffs, color_coeffs, ambient_color, dir_l
                           resolution=(256, 256))
     scene = pyredner.Scene(camera=cam, objects=[obj])
     ambient_light = pyredner.AmbientLight(ambient_color)
-    dir_light = pyredner.DirectionalLight(torch.tensor([-1.0, -1.0, -1.0]), dir_light_intensity)
+    dir_light = pyredner.DirectionalLight(dir_light_direction, dir_light_intensity)
     img = pyredner.render_deferred(scene=scene, lights=[ambient_light, dir_light])
     return (img, obj)
 
-
-cam_pos = torch.tensor([-80.2697, -55.7891, 373.9277])
+dir_light_direction = torch.tensor([-1.0, -1.0, -1.0])
+dir_light_intensity = torch.ones(3)
+cam_poses = [[-0.2697, -5.7891, 373.9277],
+             [-80.2697, -55.7891, 373.9277],
+             [-80.2697, 45.7891, 373.9277],
+             [80.2697, -55.7891, 373.9277],
+             [80.2697, 45.7891, 373.9277]]
 cam_look_at = torch.tensor([-0.2697, -5.7891, 54.7918])
+env_data = np.array((cam_poses, cam_look_at, dir_light_intensity, dir_light_direction))
+
 #img = model(cam_pos, cam_look_at, torch.ones(199, device=pyredner.get_device()), torch.ones(199, device=pyredner.get_device()), torch.ones(3), torch.zeros(3))
 #pyredner.imwrite(img.cpu(), 'img.png')
 import numpy.random as nprd
-for i in range(6):
-    (img, obj) = model(cam_pos, cam_look_at, torch.tensor(20*nprd.randn(199), device=pyredner.get_device(), dtype = torch.float32),
-                torch.tensor(1.4*nprd.randn(199), device=pyredner.get_device(), dtype = torch.float32), torch.zeros(3), torch.ones(3))
-    pyredner.imwrite(img.cpu(), 'generated/img{:0>2d}.png'.format(i))
-    pyredner.save_obj(obj, 'generated/object{:0>2d}.obj'.format(i))
+for j in range(4):
+    for i in range(len(cam_poses)):
+        cam_pos = torch.tensor(cam_poses[i])
+        (img, obj) = model(cam_pos, cam_look_at, torch.tensor(30*nprd.randn(199), device=pyredner.get_device(), dtype = torch.float32),
+                    torch.tensor(1.4*nprd.randn(199), device=pyredner.get_device(), dtype = torch.float32), torch.zeros(3), dir_light_intensity, dir_light_direction)
+        pyredner.imwrite(img.cpu(), 'generated/dataset{}/img{:0>2d}.png'.format(j, i))
+    pyredner.save_obj(obj, 'generated/dataset{}/object{:0>2d}.obj'.format(j, i))
+    np.save("generated/dataset{}/env_data.npy".format(j), env_data)
+
 
 (img, obj) = model(cam_pos, cam_look_at, torch.tensor(0*nprd.randn(199), device=pyredner.get_device(), dtype = torch.float32),
-                torch.tensor(0*nprd.randn(199), device=pyredner.get_device(), dtype = torch.float32), torch.zeros(3), torch.ones(3))
+                torch.tensor(0*nprd.randn(199), device=pyredner.get_device(), dtype = torch.float32), torch.zeros(3), dir_light_intensity, dir_light_direction)
 pyredner.imwrite(img.cpu(), 'generated/average.png')
 pyredner.save_obj(obj, 'generated/average.obj')
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+'''
 import urllib
 
 #urllib.request.urlretrieve('https://raw.githubusercontent.com/BachiLi/redner/master/tutorials/mona-lisa-cropped-256.png', 'target.png')
 target = pyredner.imread('target.png').to(pyredner.get_device())
-
-'''
 cam_pos = torch.tensor([-0.2697, -5.7891, 373.9277], requires_grad=True)
 cam_look_at = torch.tensor([-0.2697, -5.7891, 54.7918], requires_grad=True)
 shape_coeffs = torch.zeros(199, device=pyredner.get_device(), requires_grad=True)
