@@ -17,7 +17,7 @@ with h5py.File(r'model2017-1_bfm_nomouth.h5', 'r') as hf:
 indices = triangle_list.permute(1, 0).contiguous()
 print("finish loading")
 
-def model(cam_pos, cam_look_at, vertices, color_coeffs, ambient_color, dir_light_intensity):
+def model(cam_pos, cam_look_at, vertices, color_coeffs, ambient_color, dir_light_intensity, dir_light_direction):
     #vertices = (shape_mean + shape_basis @ torch.zeros(199, device=pyredner.get_device())).view(-1, 3)
     normals = pyredner.compute_vertex_normal(vertices, indices)
     colors = (color_mean + color_basis @ color_coeffs).view(-1, 3)
@@ -32,7 +32,7 @@ def model(cam_pos, cam_look_at, vertices, color_coeffs, ambient_color, dir_light
                           resolution=(256, 256))
     scene = pyredner.Scene(camera=cam, objects=[obj])
     ambient_light = pyredner.AmbientLight(ambient_color)
-    dir_light = pyredner.DirectionalLight(torch.tensor([0.0, 0.0, -1.0]), dir_light_intensity)
+    dir_light = pyredner.DirectionalLight(dir_light_direction, dir_light_intensity)
     img = pyredner.render_deferred(scene=scene, lights=[ambient_light, dir_light])
     return img, obj
 
@@ -46,7 +46,7 @@ cam_look_at = torch.tensor([-0.2697, -5.7891, 54.7918])
 import urllib
 
 #urllib.request.urlretrieve('https://raw.githubusercontent.com/BachiLi/redner/master/tutorials/mona-lisa-cropped-256.png', 'target.png')
-target = pyredner.imread('generated/img01.png').to(pyredner.get_device())
+target = pyredner.imread('generated/img03.png').to(pyredner.get_device())
 pyredner.imwrite(target.cpu(), 'process/target.png')
 
 
@@ -56,11 +56,12 @@ shape_coeffs = torch.zeros(199, device=pyredner.get_device(), requires_grad=True
 color_coeffs = torch.zeros(199, device=pyredner.get_device(), requires_grad=True)
 ambient_color = torch.zeros(3, device=pyredner.get_device(), requires_grad=True)
 dir_light_intensity = torch.ones(3, device=pyredner.get_device(), requires_grad=True)
+dir_light_direction = torch.tensor([0.0, 0.0, -1.0], device=pyredner.get_device(), requires_grad=True)
 vertices = (shape_mean + shape_basis @ torch.zeros(199, device=pyredner.get_device())).view(-1, 3)
 vertices.requires_grad = True
 
-optimizer = torch.optim.Adam([ambient_color, dir_light_intensity], lr=0.08)
-ver_optimizer = torch.optim.Adam([vertices], lr=0.002)
+light_optimizer = torch.optim.Adam([ambient_color, dir_light_intensity, dir_light_direction], lr=0.1)
+ver_optimizer = torch.optim.Adam([vertices], lr=0.0015)
 cam_optimizer = torch.optim.Adam([cam_pos, cam_look_at], lr=1.0)
 
 import matplotlib.pyplot as plt
@@ -71,50 +72,38 @@ import time
 plt.figure()
 imgs, losses = [], []
 # Run 500 Adam iterations
-num_iters = 100
+num_iters_1 = 200
+num_iters_2 = 300
 
-losstab = []
-
-for t in range(num_iters):
-    optimizer.zero_grad()
+for t in range(num_iters_1):
+    light_optimizer.zero_grad()
     cam_optimizer.zero_grad()
-    img, obj = model(cam_pos, cam_look_at, vertices, color_coeffs, ambient_color, dir_light_intensity)
-    # Compute the loss function. Here it is L2 plus a regularization term to avoid coefficients to be too far from zero.
-    # Both img and target are in linear color space, so no gamma correction is needed.
+    img, obj = model(cam_pos, cam_look_at, vertices, color_coeffs, ambient_color, dir_light_intensity, dir_light_direction)
     loss = (img - target).pow(2).mean()
-    # loss = loss + 0.0005 * color_coeffs.pow(2).mean()
     loss.backward()
-    losstab.append(loss.item())
-    optimizer.step()
+    light_optimizer.step()
     cam_optimizer.step()
     ambient_color.data.clamp_(0.0)
     dir_light_intensity.data.clamp_(0.0)
     # Plot the loss
     #f, (ax_loss, ax_diff_img, ax_img) = plt.subplots(1, 3)
-    #losses.append(loss.data.item())
+    losses.append(loss.data.item())
     # Only store images every 10th iterations
-    if t % 10 == 0:
+    if (t+1) % 20 == 0:
         #imgs.append(torch.pow(img.data, 1.0 / 2.2).cpu())  # Record the Gamma corrected image
-        pyredner.imwrite(img.data.cpu(), 'process/img{:0>2d}.png'.format(t // 10))
-
-''' clear_output(wait=True)
-    ax_loss.plot(range(len(losses)), losses, label='loss')
-    ax_loss.legend()
-    ax_diff_img.imshow((img - target).pow(2).sum(dim=2).data.cpu())
-    ax_img.imshow(torch.pow(img.data.cpu(), 1.0 / 2.2))
-    plt.show()'''
+        pyredner.imwrite(img.data.cpu(), 'process/process1_img{:0>2d}.png'.format(t // 20))
+    print("{:.^20}".format(t))
 
 
-for t in range(2*num_iters):
-    optimizer.zero_grad()
+
+for t in range(num_iters_2):
+    light_optimizer.zero_grad()
     cam_optimizer.zero_grad()
-    img, obj = model(cam_pos, cam_look_at, vertices, color_coeffs, ambient_color, dir_light_intensity)
+    img, obj = model(cam_pos, cam_look_at, vertices, color_coeffs, ambient_color, dir_light_intensity, dir_light_direction)
     # Compute the loss function. Here it is L2 plus a regularization term to avoid coefficients to be too far from zero.
     # Both img and target are in linear color space, so no gamma correction is needed.
     loss = (img - target).pow(2).mean()
-    #loss = loss + 0.005 * (vertices - (shape_mean + shape_basis @ torch.zeros(199, device=pyredner.get_device())).view(-1, 3)).pow(2).mean()
     loss.backward()
-    losstab.append(loss.item())
     #optimizer.step()
     ver_optimizer.step()
     #cam_optimizer.step()
@@ -122,12 +111,14 @@ for t in range(2*num_iters):
     dir_light_intensity.data.clamp_(0.0)
     # Plot the loss
     #f, (ax_loss, ax_diff_img, ax_img) = plt.subplots(1, 3)
-    #losses.append(loss.data.item())
+    losses.append(loss.data.item())
     # Only store images every 10th iterations
-    if t % 10 == 0:
+    if (t+1) % 20 == 0:
   #      imgs.append(torch.pow(img.data, 1.0 / 2.2).cpu())  # Record the Gamma corrected image
-        pyredner.imwrite(img.data.cpu(), 'process/img{:0>2d}.png'.format(num_iters // 10 + t // 10))
-'''    clear_output(wait=True)
+        pyredner.imwrite(img.data.cpu(), 'process/process2_img{:0>2d}.png'.format(t // 20))
+    print("{:.^20}".format(t))
+''' 
+    clear_output(wait=True)
     ax_loss.plot(range(len(losses)), losses, label='loss')
     ax_loss.legend()
     ax_diff_img.imshow((img - target).pow(2).sum(dim=2).data.cpu())
@@ -136,12 +127,25 @@ for t in range(2*num_iters):
 
 
 
-for x in losstab:
-    print('0{:0>7.6f}'.format(x), end=' ')
+#for x in losses:
+   # print('0{:0>7.6f}'.format(x), end=' ')
 
 pyredner.save_obj(obj, 'process/final.obj')
 
+img, obj = model(torch.tensor([-0.2697, -5.7891, 373.9277]), cam_look_at, vertices, color_coeffs, ambient_color, dir_light_intensity, dir_light_direction)
+pyredner.imwrite(img.data.cpu(), 'process/result/view_front.png')
+img, obj = model(torch.tensor([80.2697, -55.7891, 373.9277]), cam_look_at, vertices, color_coeffs, ambient_color, dir_light_intensity, dir_light_direction)
+pyredner.imwrite(img.data.cpu(), 'process/result/view1.png')
+img, obj = model(torch.tensor([80.2697, 45.7891, 373.9277]), cam_look_at, vertices, color_coeffs, ambient_color, dir_light_intensity, dir_light_direction)
+pyredner.imwrite(img.data.cpu(), 'process/result/view2.png')
+img, obj = model(torch.tensor([-80.2697, 45.7891, 373.9277]), cam_look_at, vertices, color_coeffs, ambient_color, dir_light_intensity, dir_light_direction)
+pyredner.imwrite(img.data.cpu(), 'process/result/view3.png')
+img, obj = model(torch.tensor([-80.2697, -55.7891, 373.9277]), cam_look_at, vertices, color_coeffs, ambient_color, dir_light_intensity, dir_light_direction)
+pyredner.imwrite(img.data.cpu(), 'process/result/view4.png')
 
+plt.plot(losses)
+plt.ylabel("loss")
+plt.xlabel("iterations")
+plt.savefig("process/result/lossCurve.png", dpi=600)
 
-
-
+print(cam_pos)

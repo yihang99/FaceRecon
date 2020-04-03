@@ -30,7 +30,7 @@ def model(cam_pos, cam_look_at, shape_coeffs, color_coeffs, ambient_color, dir_l
                           resolution=(256, 256))
     scene = pyredner.Scene(camera=cam, objects=[obj])
     ambient_light = pyredner.AmbientLight(ambient_color)
-    dir_light = pyredner.DirectionalLight(torch.tensor([0.0, 0.0, -1.0]), dir_light_intensity)
+    dir_light = pyredner.DirectionalLight(torch.tensor([-1.0, -1.0, -1.0]), dir_light_intensity)
     img = pyredner.render_deferred(scene=scene, lights=[ambient_light, dir_light])
     return (img, obj)
 
