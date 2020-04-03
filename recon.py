@@ -24,7 +24,7 @@ def model(cam_pos, cam_look_at, vertices, color_coeffs, ambient_color, dir_light
     #m = pyredner.Material(use_vertex_color=True)
     m = pyredner.Material(diffuse_reflectance=torch.tensor([0.5, 0.5, 0.5]))
     obj = pyredner.Object(vertices=vertices, indices=indices, normals=normals, material=m, colors=colors)
-
+    objects = pyredner.load_obj('git', return_objects=True)
     cam = pyredner.Camera(position=cam_pos,
                           look_at=cam_look_at,  # Center of the vertices
                           up=torch.tensor([0.0, 1.0, 0.0]),
@@ -53,7 +53,7 @@ pyredner.imwrite(target.cpu(), 'process/target.png')
 cam_pos = torch.tensor([-0.2697, -5.7891, 373.9277], requires_grad=True)
 cam_look_at = torch.tensor([-0.2697, -5.7891, 54.7918], requires_grad=True)
 shape_coeffs = torch.zeros(199, device=pyredner.get_device(), requires_grad=True)
-color_coeffs = torch.zeros(199, device=pyredner.get_device(), requires_grad=True)
+#color_coeffs = torch.zeros(199, device=pyredner.get_device(), requires_grad=True)
 ambient_color = torch.zeros(3, device=pyredner.get_device(), requires_grad=True)
 dir_light_intensity = torch.ones(3, device=pyredner.get_device(), requires_grad=True)
 dir_light_direction = torch.tensor([0.0, 0.0, -1.0], device=pyredner.get_device(), requires_grad=True)
