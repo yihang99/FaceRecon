@@ -45,13 +45,13 @@ def model(cam_pos, cam_look_at, vertices, color_coeffs, ambient_color, dir_light
 #pyredner.imwrite(img.cpu(), 'img.png')
 data_path = "generated/dataset2/"
 c_p, cam_look_at, dir_light_intensity, dir_light_direction = np.load(data_path+"env_data.npy", allow_pickle=True)
-cam_poses = torch.tensor([c_p[1]], requires_grad=True)
+cam_poses = torch.tensor(c_p, requires_grad=True)
 
 #target = pyredner.imread('generated/img03.png').to(pyredner.get_device())
 target = []
 for i in range(len(cam_poses)):
     target.append(pyredner.imread(data_path+'target_img{:0>2d}.png'.format(i)).to(pyredner.get_device()))
-#pyredner.imwrite(target.cpu(), 'process/target.png')
+pyredner.imwrite(target[i].cpu(), 'process/target_img{:0>2d}.png'.format(i))
 
 
 #cam_pos = torch.tensor([-0.2697, -5.7891, 373.9277], requires_grad=True)
@@ -65,7 +65,7 @@ vertices = (shape_mean + shape_basis @ torch.zeros(199, device=pyredner.get_devi
 vertices.requires_grad = True
 
 light_optimizer = torch.optim.Adam([ambient_color, dir_light_intensity, dir_light_direction], lr=0.1)
-ver_optimizer = torch.optim.Adam([vertices], lr=0.01)
+ver_optimizer = torch.optim.Adam([vertices], lr=0.02)
 cam_optimizer = torch.optim.Adam([cam_poses, cam_look_at], lr=1.0)
 
 import matplotlib.pyplot as plt
@@ -130,7 +130,7 @@ for t in range(num_iters_2):
     print("{:.^20}".format(t))
 
     if t == 30:
-        ver_optimizer = torch.optim.Adam([vertices], lr=0.005)
+        ver_optimizer = torch.optim.Adam([vertices], lr=0.01)
 
 
 #for x in losses:
