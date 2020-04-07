@@ -1,4 +1,4 @@
-# This program generate multi view dataset under 3DMM model
+# This program generate multi view random face dataset under 3DMM model
 
 import torch
 import pyredner
@@ -9,13 +9,7 @@ import numpy as np
 os.system("rm -rf generated")
 
 # Load the Basel face model
-with h5py.File(r'model2017-1_bfm_nomouth.h5', 'r') as hf:
-    shape_mean = torch.tensor(hf['shape/model/mean'], device=pyredner.get_device())
-    shape_basis = torch.tensor(hf['shape/model/pcaBasis'], device=pyredner.get_device())
-    triangle_list = torch.tensor(hf['shape/representer/cells'], device=pyredner.get_device())
-    color_mean = torch.tensor(hf['color/model/mean'], device=pyredner.get_device())
-    color_basis = torch.tensor(hf['color/model/pcaBasis'], device=pyredner.get_device())
-
+shape_mean, shape_basis, triangle_list, color_mean, color_basis = np.load("3dmm.npy", allow_pickle=True)
 indices = triangle_list.permute(1, 0).contiguous()
 print("finish loading")
 
@@ -30,7 +24,7 @@ def model(cam_pos, cam_look_at, shape_coeffs, color_coeffs, ambient_color, dir_l
                           look_at=cam_look_at,  # Center of the vertices
                           up=torch.tensor([0.0, 1.0, 0.0]),
                           fov=torch.tensor([45.0]),
-                          resolution=(256, 256))
+                          resolution=(512, 512))
     scene = pyredner.Scene(camera=cam, objects=[obj])
     ambient_light = pyredner.AmbientLight(ambient_color)
     dir_light = pyredner.DirectionalLight(dir_light_direction, dir_light_intensity)
@@ -51,11 +45,12 @@ env_data = np.array((cam_poses, cam_look_at, dir_light_intensity, dir_light_dire
 #pyredner.imwrite(img.cpu(), 'img.png')
 import numpy.random as nprd
 for j in range(4):
+    shape_coe = 25 * torch.randn(199, device=pyredner.get_device(), dtype = torch.float32)
     for i in range(len(cam_poses)):
         cam_pos = torch.tensor(cam_poses[i])
-        (img, obj) = model(cam_pos, cam_look_at, torch.tensor(30*nprd.randn(199), device=pyredner.get_device(), dtype = torch.float32),
+        (img, obj) = model(cam_pos, cam_look_at, shape_coe,
                     torch.tensor(1.4*nprd.randn(199), device=pyredner.get_device(), dtype = torch.float32), torch.zeros(3), dir_light_intensity, dir_light_direction)
-        pyredner.imwrite(img.cpu(), 'generated/dataset{}/img{:0>2d}.png'.format(j, i))
+        pyredner.imwrite(img.cpu(), 'generated/dataset{}/target_img{:0>2d}.png'.format(j, i))
     pyredner.save_obj(obj, 'generated/dataset{}/object{:0>2d}.obj'.format(j, i))
     np.save("generated/dataset{}/env_data.npy".format(j), env_data)
 
