@@ -1,4 +1,4 @@
-# This program reconstruct the face from single/multi images
+# This program reconstruct the face from multi images and try to smooth
 
 import torch
 import pyredner
