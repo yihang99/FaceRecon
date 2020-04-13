@@ -7,8 +7,10 @@ import h5py
 import numpy as np
 import os
 
+output_path = 'process'
+
 os.chdir('..')
-os.system("rm -rf process")
+os.system("rm -rf " + output_path)
 
 #pyredner.set_print_timing(False)
 
@@ -61,7 +63,7 @@ cam_poses = torch.tensor(c_p[:], requires_grad=False)
 target = []
 for i in range(len(cam_poses)):
     target.append(pyredner.imread(target_data_path+'target_img{:0>2d}.png'.format(i)).to(pyredner.get_device()))
-    pyredner.imwrite(target[i].cpu(), 'process/target_img{:0>2d}.png'.format(i))
+    pyredner.imwrite(target[i].cpu(), output_path + '/target_img{:0>2d}.png'.format(i))
 
 
 color_coeffs = torch.zeros(199, device=pyredner.get_device(), requires_grad=False)
@@ -107,7 +109,7 @@ for t in range(num_iters_1):
     # Only store images every 10th iterations
     if (t+1) % 20 == 0:
         #imgs.append(torch.pow(img.data, 1.0 / 2.2).cpu())  # Record the Gamma corrected image
-        pyredner.imwrite(img.data.cpu(), 'process/process1_img{:0>2d}.png'.format(t // 20))
+        pyredner.imwrite(img.data.cpu(), output_path + '/process1_img{:0>2d}.png'.format(t // 20))
     print("{:.^20}".format(t))
 '''
 
@@ -134,18 +136,18 @@ for t in range(num_iters_2):
     total_loss.backward()
     ver_optimizer.step()
 
-pyredner.save_obj(obj, 'process/final.obj')
+pyredner.save_obj(obj, output_path + '/final.obj')
 
 for i in range(len(cam_poses)):
     img, obj = model(cam_poses[i], cam_look_at, vertices, color_coeffs, ambient_color, dir_light_intensity, dir_light_direction)
-    pyredner.imwrite(img.data.cpu(), 'process/view0{}.png'.format(i))
+    pyredner.imwrite(img.data.cpu(), output_path + '/view0{}.png'.format(i))
 
     plt.plot(losses[i], label='view0{}'.format(i))
 
 plt.legend()
 plt.ylabel("loss")
 plt.xlabel("iterations")
-plt.savefig("process/lossCurve.png", dpi=800)
+plt.savefig(output_path + "/lossCurve.png", dpi=800)
 
 for i in range(len(cam_poses)):
     from matplotlib import animation
@@ -160,6 +162,6 @@ for i in range(len(cam_poses)):
         im.set_array(imgs[i][x].clamp(0.0, 1.0))
         return im,
     anim = animation.FuncAnimation(fig, update_fig, frames=len(imgs[i]), interval=300, blit=True)
-    anim.save('process/anim0{}.gif'.format(i), writer='imagemagick')
+    anim.save(output_path + '/anim0{}.gif'.format(i), writer='imagemagick')
 
 print("Finish running!")
