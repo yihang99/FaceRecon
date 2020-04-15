@@ -1,5 +1,5 @@
 # This program reconstruct the face from multi images and try to smooth
-
+# output form changed
 
 import torch
 import pyredner
@@ -7,7 +7,7 @@ import h5py
 import numpy as np
 import os
 
-output_path = 'process'
+output_path = 'process_outform'
 
 os.chdir('..')
 os.system("rm -rf " + output_path)
@@ -57,7 +57,7 @@ def model(cam_pos, cam_look_at, vertices, color_coeffs, ambient_color, dir_light
 
 target_data_path = "generated/dataset1/"
 c_p, cam_look_at, dir_light_intensity, dir_light_direction = np.load(target_data_path+"env_data.npy", allow_pickle=True)
-cam_poses = torch.tensor(c_p[:], requires_grad=False)
+cam_poses = torch.tensor(c_p[:1], requires_grad=False)
 
 #target = pyredner.imread('generated/img03.png').to(pyredner.get_device())
 target = []
@@ -83,13 +83,14 @@ ver_optimizer = torch.optim.Adam([vertices], lr=0.15)
 import matplotlib.pyplot as plt
 
 plt.figure()
-losses, imgs = [], []
+losses, imgs, diffimgs = [], [], []
 for i in range(len(cam_poses)):
     losses.append([])
     imgs.append([])
+    diffimgs.append([])
 
 num_iters_1 = 200
-num_iters_2 = 10
+num_iters_2 = 3
 
 '''
 for t in range(num_iters_1):
@@ -130,6 +131,9 @@ for t in range(num_iters_2):
         total_loss += loss
 
         imgs[i].append(torch.pow(img.data, 1.0 / 2.2).cpu())  # Record the Gamma corrected image
+        diffimgs[i].append(torch.where((img.data - target[i]).cpu() > 0,
+                                       (img.data - target[i]).cpu() * torch.tensor([0., 10., 0.]),
+                                       (img.data - target[i]).cpu() * torch.tensor([0., 0., -10.])))
         #pyredner.imwrite(abs(img - target[4]).data.cpu(), 'process/process2_img{:0>2d}.png'.format(t // 5))
     print("{:.^16}total_loss = {:.6f}".format(t, total_loss))
 
@@ -148,19 +152,25 @@ plt.legend()
 plt.ylabel("loss")
 plt.xlabel("iterations")
 plt.savefig(output_path + "/lossCurve.png", dpi=800)
+xlim = plt.xlim()
+ylim = plt.ylim()
 
 for i in range(len(cam_poses)):
     from matplotlib import animation
 
-    #Writer = animation.writers['ffmpeg']
-    #writer = Writer(fps=20, metadata=dict(artist='Me'), bitrate=1800)
-
-    fig = plt.figure()
-    # Clamp to avoid complains
-    im = plt.imshow(imgs[i][0].clamp(0.0, 1.0), animated=True)
+    fig, (img_plot, diff_plot, loss_curve) = plt.subplots(1, 3)
+    im = img_plot.imshow(imgs[i][0].clamp(0.0, 1.0), animated=True)
+    im_diff = diff_plot.imshow(diffimgs[i][0].clamp(0.0, 1.0), animated=True)
+    loss_curve.set_xlim(xlim)
+    loss_curve.set_ylim(ylim)
+    lc, = loss_curve.plot([], [], 'b')
+    #total_losses = torch.tensor(losses).sum(0)
     def update_fig(x):
         im.set_array(imgs[i][x].clamp(0.0, 1.0))
-        return im,
+        im_diff.set_array(diffimgs[i][x].clamp(0.0, 1.0))
+        lc.set_data(range(x), losses[i][:x])
+        return im, im_diff, lc
+
     anim = animation.FuncAnimation(fig, update_fig, frames=len(imgs[i]), interval=300, blit=True)
     anim.save(output_path + '/anim0{}.gif'.format(i), writer='imagemagick')
 
