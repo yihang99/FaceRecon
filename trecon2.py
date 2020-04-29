@@ -7,7 +7,7 @@ import numpy as np
 import os
 import sys
 
-output_path = 'p_max_uni_.5_infla5' #sys.argv[1][:3] + '_' + sys.argv[2][:3] + '_' + sys.argv[3][:3]
+output_path = 'p_color'#sys.argv[1][:3] + '_' + sys.argv[2][:3] + '_' + sys.argv[3][:3]
 normal_scheme = sys.argv[1]
 smooth_scheme = sys.argv[2]
 smooth_lmd = eval(sys.argv[3])
@@ -26,16 +26,19 @@ if False:
     vertices = vertices * 120
 vertices.requires_grad = True
 
-target_data_path = "generated/dataset4/"
+target_data_path = "generated/dataset5/"
 c_p, cam_look_at, dir_light_intensity, dir_light_direction = np.load(target_data_path+"env_data.npy", allow_pickle=True)
 cam_poses = torch.tensor(c_p[:], requires_grad=False)
 
 print("finish loading")
 
-def model(cam_pos, cam_look_at, vertices, ambient_color, dir_light_intensity, dir_light_direction, normals):
+colors = color_mean.view(-1, 3)
+colors.requires_grad = True
+def model(cam_pos, cam_look_at, vertices, ambient_color, dir_light_intensity, dir_light_direction, normals, colors):
    #normals = pyredner.compute_vertex_normal(vertices, indices, normal_scheme)
-    m = pyredner.Material(diffuse_reflectance=torch.tensor([0.5, 0.5, 0.5]))
-    obj = pyredner.Object(vertices=vertices, indices=indices, normals=normals, material=m)#, colors=colors)
+    #m = pyredner.Material(diffuse_reflectance=torch.tensor([0.5, 0.5, 0.5]))
+    m = pyredner.Material(use_vertex_color=True)
+    obj = pyredner.Object(vertices=vertices, indices=indices, normals=normals, material=m, colors=colors)
 
     cam = pyredner.Camera(position=cam_pos,
                           look_at=cam_look_at,  # Center of the vertices
@@ -51,13 +54,12 @@ def model(cam_pos, cam_look_at, vertices, ambient_color, dir_light_intensity, di
 target = []
 for i in range(len(cam_poses)):
     target.append(pyredner.imread(target_data_path+'target_img{:0>2d}.png'.format(i)).to(pyredner.get_device()))
-    #pyredner.imwrite(target[i].cpu(), output_path + '/target_img{:0>2d}.png'.format(i))
 
 ambient_color = torch.zeros(3, device=pyredner.get_device(), requires_grad=False)
 
 bound = 1. * pyredner.bound_vertices(vertices, indices) - 0.
 ver_optimizer = torch.optim.Adam([vertices], lr=0.2)
-#normals_optimizer = torch.optim.Adam([normals], lr=0.01)
+colors_optimizer = torch.optim.Adam([colors], lr=0.01)
 
 import matplotlib.pyplot as plt
 
@@ -68,8 +70,8 @@ for i in range(len(cam_poses)):
     imgs.append([])
     diffimgs.append([])
 
-num_iters_1 = 40
-num_iters_2 = 3
+num_iters_1 = 10
+num_iters_2 = 1
 
 '''
 for t in range(num_iters_1):
@@ -96,11 +98,12 @@ for t in range(num_iters_1):
 for t in range(num_iters_1):
     total_loss = 0
     ver_optimizer.zero_grad()
+    colors_optimizer.zero_grad()
     #normals_optimizer.zero_grad()
     normals = pyredner.compute_vertex_normal(vertices, indices, normal_scheme)
 
     for i in range(len(cam_poses)):
-        img = model(cam_poses[i], cam_look_at, vertices, ambient_color, dir_light_intensity, dir_light_direction, normals)
+        img = model(cam_poses[i], cam_look_at, vertices, ambient_color, dir_light_intensity, dir_light_direction, normals, colors)
         # Compute the loss function. Here it is L2 plus a regularization term to avoid coefficients to be too far from zero.
         # Both img and target are in linear color space, so no gamma correction is needed.
         #imgs.append(img.numpy())
@@ -110,27 +113,28 @@ for t in range(num_iters_1):
 
         imgs[i].append(torch.pow(img.data, 1.0 / 2.2).cpu())  # Record the Gamma corrected image
         diffimgs[i].append(torch.where((img.data - target[i]).cpu() > 0,
-                                       (img.data - target[i]).cpu() * torch.tensor([0., 10., 0.]),
-                                       (img.data - target[i]).cpu() * torch.tensor([0., 0., -10.])))
+                                       (img.data - target[i]).cpu() * torch.tensor([10., 10., 10.]),
+                                       (img.data - target[i]).cpu() * torch.tensor([-10., -10., -10.])))
         #pyredner.imwrite(abs(img - target[4]).data.cpu(), 'process/process2_img{:0>2d}.png'.format(t // 5))
 
     total_loss.backward()
     ver_optimizer.step()
+    colors_optimizer.step()
     vertices.data = vertices.data * bound.reshape(-1, 1).expand(-1, 3) + shape_mean.view(-1, 3) * (1. - bound).reshape(-1, 1).expand(-1, 3)
     #normals_optimizer.step()
     #normals.data = normals.data / normals.data.norm(dim=1).reshape(-1, 1).expand(-1, 3)
     if smooth_scheme != 'None':# and t > 20:
         pyredner.smooth(vertices, indices, smooth_lmd, smooth_scheme, bound)
         pyredner.smooth(vertices, indices, -smooth_lmd, smooth_scheme, bound)
-        if t > -1:
-            pyredner.smooth(vertices, indices, smooth_lmd, smooth_scheme, bound)
-            pyredner.smooth(vertices, indices, -smooth_lmd, smooth_scheme, bound)
+
+        pyredner.smooth(vertices, indices, smooth_lmd, smooth_scheme, bound)
+        pyredner.smooth(vertices, indices, -smooth_lmd, smooth_scheme, bound)
 
     print("{:.^16}total_loss = {:.6f}".format(t, total_loss))
 
 print()
-m = pyredner.Material(diffuse_reflectance=torch.tensor([0.5, 0.5, 0.5]))
-obj = pyredner.Object(vertices=vertices, indices=indices, normals=normals, material=m)#, colors=colors)
+m = pyredner.Material(use_vertex_color=True)
+obj = pyredner.Object(vertices=vertices, indices=indices, normals=normals, material=m, colors=colors)
 pyredner.save_obj(obj, output_path + '/final.obj')
 
 for t in range(num_iters_2):
@@ -138,15 +142,15 @@ for t in range(num_iters_2):
     normals = pyredner.compute_vertex_normal(vertices, indices, normal_scheme)
 
     for i in range(len(cam_poses)):
-        img = model(cam_poses[i], cam_look_at, vertices, ambient_color, dir_light_intensity, dir_light_direction, normals)
+        img = model(cam_poses[i], cam_look_at, vertices, ambient_color, dir_light_intensity, dir_light_direction, normals, colors)
         loss = (img - target[i]).pow(2).mean()
         losses[i].append(loss.data.item())
         total_loss += loss
 
         imgs[i].append(torch.pow(img.data, 1.0 / 2.2).cpu())  # Record the Gamma corrected image
         diffimgs[i].append(torch.where((img.data - target[i]).cpu() > 0,
-                                       (img.data - target[i]).cpu() * torch.tensor([0., 10., 0.]),
-                                       (img.data - target[i]).cpu() * torch.tensor([0., 0., -10.])))
+                                       (img.data - target[i]).cpu() * torch.tensor([10., 10., 10.]),
+                                       (img.data - target[i]).cpu() * torch.tensor([-10., -10., -10.])))
 
     #vertices.data = vertices.data * bound.reshape(-1, 1).expand(-1, 3) + shape_mean.view(-1, 3) * (1. - bound).reshape(-1, 1).expand(-1, 3)
 
@@ -155,13 +159,12 @@ for t in range(num_iters_2):
 
     print("{:.^16}total_loss = {:.6f}".format(num_iters_1 + t, total_loss))
 
-m = pyredner.Material(diffuse_reflectance=torch.tensor([0.5, 0.5, 0.5]))
-obj = pyredner.Object(vertices=vertices, indices=indices, normals=normals, material=m)#, colors=colors)
+obj = pyredner.Object(vertices=vertices, indices=indices, normals=normals, material=m, colors=colors)
 pyredner.save_obj(obj, output_path + '/final_s.obj')
 print(output_path + '/final_s.obj')
 
 for i in range(len(cam_poses)):
-    img = model(cam_poses[i], cam_look_at, vertices, ambient_color, dir_light_intensity, torch.tensor([1., -1., -1.]), normals)
+    img = model(cam_poses[i], cam_look_at, vertices, ambient_color, dir_light_intensity, torch.tensor([1., -1., -1.]), normals, colors)
     pyredner.imwrite(img.data.cpu(), output_path + '/view0{}.png'.format(i))
 
     plt.plot(losses[i], label='view0{}'.format(i))

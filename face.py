@@ -6,79 +6,58 @@ import h5py
 import os
 import numpy as np
 os.chdir('..')
-os.system("rm -rf generated")
+#os.system("rm -rf generated")
 
 # Load the Basel face model
 shape_mean, shape_basis, triangle_list, color_mean, color_basis = np.load("3dmm.npy", allow_pickle=True)
 indices = triangle_list.permute(1, 0).contiguous()
 print("finish loading")
 
-def model(cam_pos, cam_look_at, shape_coeffs, color_coeffs, ambient_color, dir_light_intensity, dir_light_direction):
+def model(cam_pos, cam_look_at, shape_coeffs, color_coeffs, ambient_color, dir_light_intensity, dir_light_direction, resolution):
     vertices = (shape_mean + shape_basis @ shape_coeffs).view(-1, 3)
     normals = pyredner.compute_vertex_normal(vertices, indices)
     colors = (color_mean + color_basis @ color_coeffs).view(-1, 3)
-    m = pyredner.Material(diffuse_reflectance = torch.tensor([0.5, 0.5, 0.5]))
+    #m = pyredner.Material(diffuse_reflectance = torch.tensor([0.5, 0.5, 0.5]))
+    m = pyredner.Material(use_vertex_color=True)
     obj = pyredner.Object(vertices=vertices, indices=indices, normals=normals, material=m, colors=colors)
 
     cam = pyredner.Camera(position=cam_pos,
                           look_at=cam_look_at,  # Center of the vertices
                           up=torch.tensor([0.0, 1.0, 0.0]),
                           fov=torch.tensor([45.0]),
-                          resolution=(640, 640))
+                          resolution=resolution)
     scene = pyredner.Scene(camera=cam, objects=[obj])
     ambient_light = pyredner.AmbientLight(ambient_color)
     dir_light = pyredner.DirectionalLight(dir_light_direction, dir_light_intensity)
-    img = pyredner.render_deferred(scene=scene, lights=[ambient_light, dir_light])
+    img = pyredner.render_deferred(scene=scene, lights=[ambient_light, dir_light], aa_samples=1)
     return (img, obj)
 
 dir_light_direction = torch.tensor([-1.0, -1.0, -1.0])
 dir_light_intensity = torch.ones(3)
-cam_poses = [[-0.2697, -5.7891, 370.9277],
-             [-100.2697, -55.7891, 370.9277],
-             [-100.2697, 45.7891, 370.9277],
-             [100.2697, -55.7891, 370.9277],
-             [100.2697, 45.7891, 370.9277]]
+cam_poses = [[-0.2697, -5.7891, 350.9277],
+             [-240.2697, -5.7891, 240.9277],
+             [240.2697, -5.7891, 240.9277],
+             [-100.2697, -75.7891, 320.9277],
+             [-100.2697, 65.7891, 320.9277],
+             [100.2697, -65.7891, 320.9277],
+             [100.2697, 75.7891, 320.9277]]
 cam_look_at = torch.tensor([-0.2697, -5.7891, 54.7918])
+resolution = (1000, 1000)
 env_data = np.array((cam_poses, cam_look_at, dir_light_intensity, dir_light_direction))
 
 #img = model(cam_pos, cam_look_at, torch.ones(199, device=pyredner.get_device()), torch.ones(199, device=pyredner.get_device()), torch.ones(3), torch.zeros(3))
 #pyredner.imwrite(img.cpu(), 'img.png')
 import numpy.random as nprd
-for j in range(4):
+for j in range(5, 6):
     shape_coe = 25 * torch.randn(199, device=pyredner.get_device(), dtype = torch.float32)
+    color_coe = torch.tensor(1.6*nprd.randn(199), device=pyredner.get_device(), dtype = torch.float32)
     for i in range(len(cam_poses)):
         cam_pos = torch.tensor(cam_poses[i])
-        (img, obj) = model(cam_pos, cam_look_at, shape_coe,
-                    torch.tensor(1.4*nprd.randn(199), device=pyredner.get_device(), dtype = torch.float32), torch.zeros(3), dir_light_intensity, dir_light_direction)
+        (img, obj) = model(cam_pos, cam_look_at, shape_coe, color_coe,
+                           torch.zeros(3), dir_light_intensity, dir_light_direction, (1000, 1000))
         pyredner.imwrite(img.cpu(), 'generated/dataset{}/target_img{:0>2d}.png'.format(j, i))
-    pyredner.save_obj(obj, 'generated/dataset{}/object{:0>2d}.obj'.format(j, i))
+    pyredner.save_obj(obj, 'generated/dataset{}/object{:0>2d}.obj'.format(j, j))
     np.save("generated/dataset{}/env_data.npy".format(j), env_data)
-
-
-(img, obj) = model(cam_pos, cam_look_at, torch.tensor(0*nprd.randn(199), device=pyredner.get_device(), dtype = torch.float32),
-                torch.tensor(0*nprd.randn(199), device=pyredner.get_device(), dtype = torch.float32), torch.zeros(3), dir_light_intensity, dir_light_direction)
-pyredner.imwrite(img.cpu(), 'generated/average.png')
-pyredner.save_obj(obj, 'generated/average.obj')
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 '''
