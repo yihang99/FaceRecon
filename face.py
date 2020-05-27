@@ -32,9 +32,19 @@ def model(cam_pos, cam_look_at, shape_coeffs, color_coeffs, ambient_color, dir_l
     img = pyredner.render_deferred(scene=scene, lights=[ambient_light, dir_light], aa_samples=1)
     return (img, obj)
 
-dir_light_direction = torch.tensor([-1.0, -1.0, -1.0])
+
+dir_light_directions = [[-1.0, -1.0, -1.0],
+                        [1.0, -0.0, -1.0],
+                        [0.0, 0.0, -1.0]]
 dir_light_intensity = torch.ones(3)
 cam_poses = [[-0.2697, -5.7891, 350.9277],
+             [-240.2697, -5.7891, 240.9277],
+             [240.2697, -5.7891, 240.9277],
+             [-100.2697, -75.7891, 320.9277],
+             [-100.2697, 65.7891, 320.9277],
+             [100.2697, -65.7891, 320.9277],
+             [100.2697, 75.7891, 320.9277],
+             [-0.2697, -5.7891, 350.9277],
              [-240.2697, -5.7891, 240.9277],
              [240.2697, -5.7891, 240.9277],
              [-100.2697, -75.7891, 320.9277],
@@ -43,19 +53,21 @@ cam_poses = [[-0.2697, -5.7891, 350.9277],
              [100.2697, 75.7891, 320.9277]]
 cam_look_at = torch.tensor([-0.2697, -5.7891, 54.7918])
 resolution = (1000, 1000)
-env_data = np.array((cam_poses, cam_look_at, dir_light_intensity, dir_light_direction))
+env_data = np.array((cam_poses, cam_look_at, dir_light_intensity, dir_light_directions))
 
 #img = model(cam_pos, cam_look_at, torch.ones(199, device=pyredner.get_device()), torch.ones(199, device=pyredner.get_device()), torch.ones(3), torch.zeros(3))
 #pyredner.imwrite(img.cpu(), 'img.png')
 import numpy.random as nprd
-for j in range(5, 6):
-    shape_coe = 25 * torch.randn(199, device=pyredner.get_device(), dtype = torch.float32)
-    color_coe = torch.tensor(1.6*nprd.randn(199), device=pyredner.get_device(), dtype = torch.float32)
+for j in range(0, 1):
+    shape_coe = 0. * 25 * torch.randn(199, device=pyredner.get_device(), dtype = torch.float32)
+    color_coe = torch.tensor(0*3*nprd.randn(199), device=pyredner.get_device(), dtype = torch.float32)
     for i in range(len(cam_poses)):
         cam_pos = torch.tensor(cam_poses[i])
+        dir_light_direction = torch.tensor(dir_light_directions[i % len(dir_light_directions)])
         (img, obj) = model(cam_pos, cam_look_at, shape_coe, color_coe,
                            torch.zeros(3), dir_light_intensity, dir_light_direction, (1000, 1000))
         pyredner.imwrite(img.cpu(), 'generated/dataset{}/target_img{:0>2d}.png'.format(j, i))
+    obj.material = pyredner.Material(diffuse_reflectance=torch.tensor([0.5, 0.5, 0.5]))
     pyredner.save_obj(obj, 'generated/dataset{}/object{:0>2d}.obj'.format(j, j))
     np.save("generated/dataset{}/env_data.npy".format(j), env_data)
 

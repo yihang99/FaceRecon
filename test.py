@@ -3,19 +3,15 @@ import pyredner
 import numpy as np
 import os
 import sys
+import argparse
 
-obj = pyredner.load_obj("../process_test9/final.obj", return_objects=True)[0]
-#obj = pyredner.load_obj("../cube.obj", return_objects=True)[0]
+dir_light_directions = torch.tensor([[-1.0, -1.0, -1.0],
+                                     [1.0, -0.0, -1.0],
+                                     [0.0, 0.0, -1.0]])
+dir_light_intensities = torch.ones(3, dtype=torch.float32).expand(3, 3)
 
-bound = pyredner.bound_vertices(obj.vertices, obj.indices)
+dir_lights = [pyredner.DirectionalLight(dir_light_directions[i], dir_light_intensities[i]) for i in range(len(dir_light_directions))]
 
-for i in range(3):
-    pyredner.smooth(obj.vertices, obj.indices, weighting_scheme='uniform', lmd=0.5, control=bound)
-    pyredner.smooth(obj.vertices, obj.indices, weighting_scheme='uniform', lmd=-0.5, control=bound)
+data = np.array(dir_lights)
 
-#obj.normals = pyredner.compute_vertex_normal(obj.vertices, obj.indices, weighting_scheme='cotangent')
-
-pyredner.save_obj(obj, "../nnew.obj")
-
-# This program reconstruct the face from multi images and try to smooth
-# output form changed
+np.save("data.npy", data)
