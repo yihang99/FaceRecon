@@ -6,14 +6,17 @@ import h5py
 import os
 import numpy as np
 os.chdir('..')
-#os.system("rm -rf generated")
+
+name = 'ones'
+
+os.system('rm -rf generated/dataset_' + name)
 
 # Load the Basel face model
 shape_mean, shape_basis, triangle_list, color_mean, color_basis = np.load("3dmm.npy", allow_pickle=True)
 indices = triangle_list.permute(1, 0).contiguous()
 print("finish loading")
 
-def model(cam_pos, cam_look_at, shape_coeffs, color_coeffs, ambient_color, dir_light_intensity, dir_light_direction, resolution):
+def model(cam_poses, cam_look_at, shape_coeffs, color_coeffs, lights_list, resolution):
     vertices = (shape_mean + shape_basis @ shape_coeffs).view(-1, 3)
     normals = pyredner.compute_vertex_normal(vertices, indices)
     colors = (color_mean + color_basis @ color_coeffs).view(-1, 3)
@@ -21,55 +24,64 @@ def model(cam_pos, cam_look_at, shape_coeffs, color_coeffs, ambient_color, dir_l
     m = pyredner.Material(use_vertex_color=True)
     obj = pyredner.Object(vertices=vertices, indices=indices, normals=normals, material=m, colors=colors)
 
-    cam = pyredner.Camera(position=cam_pos,
-                          look_at=cam_look_at,  # Center of the vertices
-                          up=torch.tensor([0.0, 1.0, 0.0]),
-                          fov=torch.tensor([45.0]),
-                          resolution=resolution)
-    scene = pyredner.Scene(camera=cam, objects=[obj])
-    ambient_light = pyredner.AmbientLight(ambient_color)
-    dir_light = pyredner.DirectionalLight(dir_light_direction, dir_light_intensity)
-    img = pyredner.render_deferred(scene=scene, lights=[ambient_light, dir_light], aa_samples=1)
-    return (img, obj)
+    imgs = []
+    for i in range(cam_poses.size(0)):
+        cam = pyredner.Camera(position=cam_poses[i],
+                              look_at=cam_look_at,  # Center of the vertices
+                              up=torch.tensor([0.0, 1.0, 0.0]),
+                              fov=torch.tensor([45.0]),
+                              resolution=resolution)
+        scene = pyredner.Scene(camera=cam, objects=[obj])
+        #ambient_light = pyredner.AmbientLight(ambient_color)
+        #dir_light = pyredner.DirectionalLight(dir_light_direction, dir_light_intensity)
+        img = pyredner.render_deferred(scene=scene, lights=lights_list[i % len(lights_list)], aa_samples=1)
+        imgs.append(img)
+    return imgs, obj
 
 
-dir_light_directions = [[-1.0, -1.0, -1.0],
-                        [1.0, -0.0, -1.0],
-                        [0.0, 0.0, -1.0]]
-dir_light_intensity = torch.ones(3)
-cam_poses = [[-0.2697, -5.7891, 350.9277],
-             [-240.2697, -5.7891, 240.9277],
-             [240.2697, -5.7891, 240.9277],
-             [-100.2697, -75.7891, 320.9277],
-             [-100.2697, 65.7891, 320.9277],
-             [100.2697, -65.7891, 320.9277],
-             [100.2697, 75.7891, 320.9277],
-             [-0.2697, -5.7891, 350.9277],
-             [-240.2697, -5.7891, 240.9277],
-             [240.2697, -5.7891, 240.9277],
-             [-100.2697, -75.7891, 320.9277],
-             [-100.2697, 65.7891, 320.9277],
-             [100.2697, -65.7891, 320.9277],
-             [100.2697, 75.7891, 320.9277]]
+dir_light_directions = torch.tensor([[-1.0, -1.0, -1.0],
+                                    [1.0, -0.0, -1.0],
+                                    [0.0, 0.0, -1.0]])
+dir_light_intensity = torch.ones(3) / 2
+
+lights_list = [[pyredner.DirectionalLight(dir_light_directions[i], dir_light_intensity)] for i in range(3)]
+
+cam_poses = torch.tensor([[-0.2697, -5.7891, 350.9277],
+                          [-240.2697, -5.7891, 240.9277],
+                          [240.2697, -5.7891, 240.9277],
+                          [-100.2697, -95.7891, 320.9277],
+                          [-100.2697, 85.7891, 320.9277],
+                          [100.2697, -95.7891, 320.9277],
+                          [100.2697, 85.7891, 320.9277],
+                          [-0.2697, -5.7891, 350.9277],
+                          [-240.2697, -5.7891, 240.9277],
+                          [240.2697, -5.7891, 240.9277],
+                          [-100.2697, -95.7891, 320.9277],
+                          [-100.2697, 85.7891, 320.9277],
+                          [100.2697, -95.7891, 320.9277],
+                          [100.2697, 85.7891, 320.9277]])
+
+cam_poses = cam_poses[:7]
+
 cam_look_at = torch.tensor([-0.2697, -5.7891, 54.7918])
 resolution = (1000, 1000)
-env_data = np.array((cam_poses, cam_look_at, dir_light_intensity, dir_light_directions))
+env_data = np.array((cam_poses, cam_look_at, lights_list))
 
 #img = model(cam_pos, cam_look_at, torch.ones(199, device=pyredner.get_device()), torch.ones(199, device=pyredner.get_device()), torch.ones(3), torch.zeros(3))
 #pyredner.imwrite(img.cpu(), 'img.png')
 import numpy.random as nprd
-for j in range(0, 1):
-    shape_coe = 0. * 25 * torch.randn(199, device=pyredner.get_device(), dtype = torch.float32)
-    color_coe = torch.tensor(0*3*nprd.randn(199), device=pyredner.get_device(), dtype = torch.float32)
-    for i in range(len(cam_poses)):
-        cam_pos = torch.tensor(cam_poses[i])
-        dir_light_direction = torch.tensor(dir_light_directions[i % len(dir_light_directions)])
-        (img, obj) = model(cam_pos, cam_look_at, shape_coe, color_coe,
-                           torch.zeros(3), dir_light_intensity, dir_light_direction, (1000, 1000))
-        pyredner.imwrite(img.cpu(), 'generated/dataset{}/target_img{:0>2d}.png'.format(j, i))
-    obj.material = pyredner.Material(diffuse_reflectance=torch.tensor([0.5, 0.5, 0.5]))
-    pyredner.save_obj(obj, 'generated/dataset{}/object{:0>2d}.obj'.format(j, j))
-    np.save("generated/dataset{}/env_data.npy".format(j), env_data)
+
+
+shape_coe = 25 * torch.ones(199, device=pyredner.get_device()) #torch.randn(199, device=pyredner.get_device(), dtype=torch.float32)
+color_coe = 3 * torch.ones(199, device=pyredner.get_device()) #torch.tensor(3 * nprd.randn(199), device=pyredner.get_device(), dtype=torch.float32)
+
+imgs, obj = model(cam_poses, cam_look_at, shape_coe, color_coe, lights_list, (1000, 1000))
+for i in range(len(imgs)):
+    pyredner.imwrite(imgs[i].cpu(), 'generated/dataset_' + name + '/tgt_img{:0>2d}.png'.format(i))
+
+obj.material = pyredner.Material(diffuse_reflectance=torch.tensor([0.5, 0.5, 0.5]))
+pyredner.save_obj(obj, 'generated/dataset_' + name + '/' + name + '.obj')
+np.save('generated/dataset_' + name + '/env_data.npy', env_data)
 
 
 '''
