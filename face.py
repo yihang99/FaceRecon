@@ -7,7 +7,7 @@ import os
 import numpy as np
 os.chdir('..')
 
-name = 'ones'
+name = 'ones30'
 
 os.system('rm -rf generated/dataset_' + name)
 
@@ -40,8 +40,9 @@ def model(cam_poses, cam_look_at, shape_coeffs, color_coeffs, lights_list, resol
 
 
 dir_light_directions = torch.tensor([[-1.0, -1.0, -1.0],
-                                    [1.0, -0.0, -1.0],
-                                    [0.0, 0.0, -1.0]])
+                                    [1.0, 1.0, -1.0],
+                                    [-1.0, 1.0, -1.0],
+                                    [1.0, -1.0, -1.0]])
 dir_light_intensity = torch.ones(3) / 2
 
 lights_list = [[pyredner.DirectionalLight(dir_light_directions[i], dir_light_intensity)] for i in range(3)]
@@ -59,9 +60,16 @@ cam_poses = torch.tensor([[-0.2697, -5.7891, 350.9277],
                           [-100.2697, -95.7891, 320.9277],
                           [-100.2697, 85.7891, 320.9277],
                           [100.2697, -95.7891, 320.9277],
+                          [100.2697, 85.7891, 320.9277],
+                          [-0.2697, -5.7891, 350.9277],
+                          [-240.2697, -5.7891, 240.9277],
+                          [240.2697, -5.7891, 240.9277],
+                          [-100.2697, -95.7891, 320.9277],
+                          [-100.2697, 85.7891, 320.9277],
+                          [100.2697, -95.7891, 320.9277],
                           [100.2697, 85.7891, 320.9277]])
 
-cam_poses = cam_poses[:7]
+cam_poses = cam_poses[:]
 
 cam_look_at = torch.tensor([-0.2697, -5.7891, 54.7918])
 resolution = (1000, 1000)
@@ -72,7 +80,7 @@ env_data = np.array((cam_poses, cam_look_at, lights_list))
 import numpy.random as nprd
 
 
-shape_coe = 25 * torch.ones(199, device=pyredner.get_device()) #torch.randn(199, device=pyredner.get_device(), dtype=torch.float32)
+shape_coe = 30 * torch.ones(199, device=pyredner.get_device()) #torch.randn(199, device=pyredner.get_device(), dtype=torch.float32)
 color_coe = 3 * torch.ones(199, device=pyredner.get_device()) #torch.tensor(3 * nprd.randn(199), device=pyredner.get_device(), dtype=torch.float32)
 
 imgs, obj = model(cam_poses, cam_look_at, shape_coe, color_coe, lights_list, (1000, 1000))

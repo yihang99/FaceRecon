@@ -58,14 +58,14 @@ print(vars(args))
 #</editor-fold>
 
 os.chdir('..')
-os.system("rm -rf " + output_path)
+#os.system("rm -rf " + output_path)
 
 pyredner.set_print_timing(False)
 
 #shape_mean, shape_basis, triangle_list, color_mean, color_basis = np.load("3dmm.npy", allow_pickle=True)
 #indices = triangle_list.permute(1, 0).contiguous()
 #vertices = shape_mean.view(-1, 3)
-obj = pyredner.load_obj("init/final.obj", return_objects=True)[0]
+obj = pyredner.load_obj("p_ones30/final.obj", return_objects=True)[0]
 indices = obj.indices.detach()
 vertices = obj.vertices.detach()
 
@@ -78,7 +78,7 @@ m = pyredner.Material(diffuse_reflectance=texels)
 
 vertices.requires_grad = True
 
-target_data_path = "generated/dataset_ones/"
+target_data_path = "generated/dataset_ones30/"
 cam_poses, cam_look_at, lights_list = np.load(target_data_path + "env_data.npy", allow_pickle=True)
 #cam_poses = cam_poses[:1]
 
@@ -139,7 +139,7 @@ for t in range(num_iters_1):
     m = pyredner.Material(diffuse_reflectance=texels)
     imgs = model(cam_poses, cam_look_at, vertices, lights_list, normals, m)
     # imgs of all viewpoints
-    all_imgs.append(imgs)
+    #all_imgs.append(imgs)
     # record all imgs
     losses = torch.stack([(imgs[i] - target[i]).pow(2).mean() for i in range(len(imgs))])
     # losses of all imgs in this single iteration
@@ -147,7 +147,7 @@ for t in range(num_iters_1):
     # all_losses records the losses in all iterations
     img_loss = losses.sum()
 
-    smooth_loss = 0.1 * pyredner.smooth(vertices, indices, 0., smooth_scheme, bound, True)
+    smooth_loss = 0.1 * pyredner.smooth(vertices, indices, 0., smooth_scheme, bound, True).pow(2).mean()
 
     total_loss = img_loss # + smooth_loss
     total_losses.append(total_loss)
@@ -184,7 +184,7 @@ print()
 obj = pyredner.Object(vertices=vertices, indices=indices, normals=normals, material=m, uvs=uvs, uv_indices=uv_indices)  # , colors=colors)
 pyredner.save_obj(obj, output_path + '/final.obj')
 #pyredner.imwrite(texels.data.cpu(), output_path + '/texels.png')
-
+'''
 import matplotlib.pyplot as plt
 
 plt.figure()
@@ -229,7 +229,7 @@ for i in range(len(cam_poses)):
     plt.suptitle(description + '\n' + str(vars(args))[1:-1].replace("'", ""), fontsize=16, color='blue')
 
     im = img_plot.imshow(torch.pow(all_imgs[0][i], 1.0 / 2.2).clamp(0.0, 1.0).detach().cpu(), animated=True)
-    im_diff = diff_plot.imshow(abs(all_imgs[0][i] - target[i]).clamp(0.0, 1.0).detach().cpu(), animated=True)
+    im_diff = diff_plot.imshow(abs(all_imgs[0][i] - target[i]).clamp(0.0, 1.0).detach().cpu() * 10., animated=True)
     loss_curve.set_xlim(xlim)
     loss_curve.set_ylim(ylim)
     lc, = loss_curve.plot([], [], 'b')
@@ -265,3 +265,4 @@ anim.save(output_path + '/anim_texels.gif'.format(i), writer='imagemagick')
 print('anim_texels.gif generated'.format(i))
 
 print("Finish running!")
+'''
